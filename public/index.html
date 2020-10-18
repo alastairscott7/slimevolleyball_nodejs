@@ -47,8 +47,9 @@ input[type='checkbox'] {
 </style>
 <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.1/socket.io.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/p5@1.0.0/lib/p5.js"></script>
-<script type="text/javascript" src="Input.js"></script>
-<script type="text/javascript" src="SlimeAI.js"></script>
+<script src = "/game/socket.io/socket.io.js"></script>
+<script type="text/javascript" src="/Input.js"></script>
+<script type="text/javascript" src="/SlimeAI.js"></script>
 <script type="text/javascript">
 
 var TWO_PI = Math.PI*2;
@@ -146,7 +147,7 @@ var GAME_STATE_SHOW_WINNER = 5;
 
   //SOCKETS
   var socket;
-  var playerNo;
+  var playerNo = 0;
   var playerId;
 
   // MENU DATA
@@ -188,6 +189,7 @@ var GAME_STATE_SHOW_WINNER = 5;
   var slimeRightScore;
   var updateCount; // RESET every time GAME_STATE_RUNNING is set
   var leftWon;
+  var pointScored;
 
   /*function updateFromServer() {
   
@@ -263,39 +265,39 @@ var GAME_STATE_SHOW_WINNER = 5;
       }
     }
   }
+  
+  function collisionBallSlime(s) {
+	var dx = 2 * (ball.x - s.x);
+	var dy = ball.y - s.y;
+	var dist = Math.trunc(Math.sqrt(dx * dx + dy * dy));
 
+	var dVelocityX = ball.velocityX - s.velocityX;
+	var dVelocityY = ball.velocityY - s.velocityY;
+
+	if(dy > 0 && dist < ball.radius + s.radius && dist > FUDGE) {
+		var oldBall = {x:ball.x,y:ball.y,velocityX:ball.velocityX,velocityY:ball.velocityY};
+
+		ball.x = s.x + Math.trunc(Math.trunc((s.radius + ball.radius) / 2) * dx / dist);
+		ball.y = s.y + Math.trunc((s.radius + ball.radius) * dy / dist);
+
+		var something = Math.trunc((dx * dVelocityX + dy * dVelocityY) / dist);
+
+		if(something <= 0) {
+			ball.velocityX += Math.trunc(s.velocityX - 2 * dx * something / dist);
+			ball.velocityY += Math.trunc(s.velocityY - 2 * dy * something / dist);
+			if(     ball.velocityX < -MAX_VELOCITY_X) ball.velocityX = -MAX_VELOCITY_X;
+			else if(ball.velocityX >  MAX_VELOCITY_X) ball.velocityX =  MAX_VELOCITY_X;
+			if(     ball.velocityY < -MAX_VELOCITY_Y) ball.velocityY = -MAX_VELOCITY_Y;
+			else if(ball.velocityY >  MAX_VELOCITY_Y) ball.velocityY =  MAX_VELOCITY_Y;
+		}
+	}
+}
+  
+  var FUDGE = 5;
   var MAX_VELOCITY_X = 15;
   var MAX_VELOCITY_Y = 22;
-  function collisionBallSlime(s) {
-    var dx = 2 * (ball.x - s.x);
-    var dy = ball.y - s.y;
-    var dist = Math.trunc(Math.sqrt(dx * dx + dy * dy));
-
-    var dVelocityX = ball.velocityX - s.velocityX;
-    var dVelocityY = ball.velocityY - s.velocityY;
-
-    if(dy > 0 && dist < ball.radius + s.radius && dist > FUDGE) {
-      var oldBall = {x:ball.x,y:ball.y,velocityX:ball.velocityX,velocityY:ball.velocityY};
-
-      ball.x = s.x + Math.trunc(Math.trunc((s.radius + ball.radius) / 2) * dx / dist);
-      ball.y = s.y + Math.trunc((s.radius + ball.radius) * dy / dist);
-
-      var something = Math.trunc((dx * dVelocityX + dy * dVelocityY) / dist);
-
-      if(something <= 0) {
-        ball.velocityX += Math.trunc(s.velocityX - 2 * dx * something / dist);
-        ball.velocityY += Math.trunc(s.velocityY - 2 * dy * something / dist);
-        if(     ball.velocityX < -MAX_VELOCITY_X) ball.velocityX = -MAX_VELOCITY_X;
-        else if(ball.velocityX >  MAX_VELOCITY_X) ball.velocityX =  MAX_VELOCITY_X;
-        if(     ball.velocityY < -MAX_VELOCITY_Y) ball.velocityY = -MAX_VELOCITY_Y;
-        else if(ball.velocityY >  MAX_VELOCITY_Y) ball.velocityY =  MAX_VELOCITY_Y;
-      }
-    }
-  }
-  var FUDGE = 5; // not sure why this is needed
-  // returns true if end of point
   function updateBall() {
-    ball.velocityY += -1; // gravity
+	ball.velocityY += -1; // gravity
     if(ball.velocityY < -MAX_VELOCITY_Y) {
       ball.velocityY = -MAX_VELOCITY_Y;
     }
@@ -328,22 +330,30 @@ var GAME_STATE_SHOW_WINNER = 5;
         ball.velocityX = ball.velocityX <= 0 ? -ball.velocityX : ball.velocityX;
       }
     }
-
-    // Check for end of point
-    if(ball.y < 0) {
+	if(ball.y < 0) {
       if(ball.x > 500) {
-        leftWon = true;
-        slimeLeftScore++;
+        //leftWon = true;
+        //slimeLeftScore++;
       } else {
-        leftWon = false;
-        slimeRightScore++;
+        //leftWon = false;
+        //slimeRightScore++;
       }
+    }
+	
+    // Check for end of point
+    if(pointScored) {
       endPoint()
       return true;
     }
     return false;
   }
+  
   function updateFrame() {
+    slimeLeft.velocityXPrev = slimeLeft.velocityX;
+	slimeLeft.velocityYPrev = slimeLeft.velocityY;
+	slimeRight.velocityXPrev = slimeRight.velocityX;
+	slimeRight.velocityYPrev = slimeRight.velocityY;
+	
     if (playerNo == 1) {
 	  updateSlimeVelocitiesWithKeys(slimeLeft, KEY_A,KEY_D,KEY_W);
 	}
@@ -428,11 +438,11 @@ var GAME_STATE_SHOW_WINNER = 5;
       }
       updateFrame();
 	  
-	  if (playerNo == 1) {
+	  if ((playerNo == 1) && ((slimeLeft.velocityXPrev != slimeLeft.velocityX) || (slimeLeft.velocityYPrev != slimeLeft.velocityY))) {
 	    socket.emit('sendLeft', {x: slimeLeft.x, y: slimeLeft.y, a: slimeLeft.velocityX, b: slimeLeft.velocityY});
 	  }
 	  
-	  if (playerNo == 2) {
+	  if ((playerNo == 2) && ((slimeRight.velocityXPrev != slimeRight.velocityX) || (slimeRight.velocityYPrev != slimeRight.velocityY))) {
 	    socket.emit('sendRight', {x: slimeRight.x, y: slimeRight.y, a: slimeRight.velocityX, b: slimeRight.velocityY});
 	  }
 	  
@@ -445,7 +455,9 @@ var GAME_STATE_SHOW_WINNER = 5;
 
   function spaceKeyDown() {
     if(gameState == GAME_STATE_SHOW_WINNER) {
-      start();
+	  socket.emit('reset');
+	  socket.disconnect();
+      toInitialMenu();
     }
   }
   function endMatch() {
@@ -454,7 +466,7 @@ var GAME_STATE_SHOW_WINNER = 5;
 
     menuDiv.innerHTML = '<div style="text-align:center;">' +
       '<h1 style="margin:50px 0 20px 0;">Player ' + (leftWon ? '1' : '2') + ' Wins!</h1>' +
-      "Press 'space' for rematch..." +
+      "Press 'space' to return to menu..." +
       '</div>';
 
     menuDiv.style.display = 'block';
@@ -464,9 +476,16 @@ var GAME_STATE_SHOW_WINNER = 5;
     initRound(leftWon);
     updatesToPaint = 0;
     updateCount = 0;
+	if (playerNo == 1) {
+	  socket.emit('sendLeft', {x: slimeLeft.x, y: slimeLeft.y, a: slimeLeft.velocityX, b: slimeLeft.velocityY});
+	}  
+	if (playerNo == 2) {
+	  socket.emit('sendRight', {x: slimeRight.x, y: slimeRight.y, a: slimeRight.velocityX, b: slimeRight.velocityY});
+	}
     gameState = GAME_STATE_RUNNING;
   }
   function endPoint() {
+    pointScored = false;
     if(slimeLeftScore >= WIN_AMOUNT) {
       endMatch(true);
       return;
@@ -487,20 +506,27 @@ var GAME_STATE_SHOW_WINNER = 5;
     }, 700);
   }
   function initRound(server) {
+    if (playerNo == 1) {
+	  socket.emit('initRound', {s: server});
+	}
     ball.x = server ? 200 : 800;
     ball.y = 356;
-    ball.velocityX = 0;
-    ball.velocityY = 0;
+    //ball.velocityX = 0;
+    //ball.velocityY = 0;
 
     slimeLeft.x = 200;
     slimeLeft.y = 0;
     slimeLeft.velocityX = 0;
     slimeLeft.velocityY = 0;
+	slimeLeft.velocityXPrev = 0;
+	slimeLeft.velocityYPrev = 0;
 
     slimeRight.x = 800;
     slimeRight.y = 0;
     slimeRight.velocityX = 0;
     slimeRight.velocityY = 0;
+	slimeRight.velocityXPrev = 0;
+	slimeRight.velocityYPrev = 0;
   }
 
   function updateWindowSize(width,height) {
@@ -546,7 +572,7 @@ var GAME_STATE_SHOW_WINNER = 5;
     menuDiv.style.width  = '750px';
     menuDiv.style.height = '375px';
 
-    menuDiv.style.background = "#ca6 url('sky2.jpg') no-repeat";
+    menuDiv.style.background = "#ca6 url('http://slimevolleyball.io/game/sky2.jpg') no-repeat";
     contentDiv.appendChild(menuDiv);
 
     // Create options menu div
@@ -563,22 +589,22 @@ var GAME_STATE_SHOW_WINNER = 5;
     slimeRight = newLegacySlime(false,100,'#f00');
 
     var localSkyImage = new Image();
-    localSkyImage.src = 'sky2.jpg';
+    localSkyImage.src = 'http://slimevolleyball.io/game/sky2.jpg';
     localSkyImage.onload = function() {
       backImages['sky'] = this;
     }
 
     var localBallImage = new Image();
-    localBallImage.src = 'vball.png';
+    localBallImage.src = 'http://slimevolleyball.io/game/vball.png';
     localBallImage.onload = function() {
       ballImage = this;
     }
 
     greenSlimeImage = new Image();
-    greenSlimeImage.src = 'slime175green.png';
+    greenSlimeImage.src = 'http://slimevolleyball.io/game/slime175green.png';
 
     redSlimeImage = new Image();
-    redSlimeImage.src = 'slime175red.png';
+    redSlimeImage.src = 'http://slimevolleyball.io/game/slime175red.png';
 
     toInitialMenu();
   }
@@ -587,27 +613,49 @@ var GAME_STATE_SHOW_WINNER = 5;
   function start() {
     slimeLeftScore = 0;
     slimeRightScore = 0;
+	pointScored = false;
 
     slimeLeft.img = greenSlimeImage;
-    socket = io.connect('localhost:3000');
+    socket = io.connect("/", {path: "/game/socket.io"});
 	
 	socket.on ('playerData', function (data) {
 	  playerId = data.id;
       playerNo = data.playerNo;
     });
 	
-	socket.on ('updateLeft', function (data) {
-	  if (playerNo == 2) {
-	    slimeLeft.x = data.x;
-        slimeLeft.y = data.y;
+	socket.on ('update', function (data) {
+	  if (playerNo != 1) {
+	    slimeLeft.velocityX = data.axl;
+		if ((slimeLeft.velocityY == 0) && (data.ayl > 0)) {
+          slimeLeft.velocityY = 31;
+		}
+		if (slimeLeft.velocityX == 0) {
+	      slimeLeft.x = data.xl;
+		}
+		if (slimeLeft.velocityY == 0) {
+		  slimeLeft.y = data.yl;
+		}
 	  }
-    });
-	
-	socket.on ('updateRight', function (data) {
-	  if (playerNo == 1) {
-	    slimeRight.x = data.x;
-        slimeRight.y = data.y;
+	  if (playerNo != 2) {
+	    slimeRight.velocityX = data.axr;
+		if ((slimeRight.velocityY == 0) && (data.ayr > 0)) {
+          slimeRight.velocityY = 31;
+		}
+	    if (slimeRight.velocityX == 0) {
+	      slimeRight.x = data.xr;
+		}
+		if (slimeRight.velocityY == 0) {
+		  slimeRight.y = data.yr;
+		}
 	  }
+	  pointScored = data.ps;
+	  ball.x = data.bx;
+	  ball.y = data.by;
+	  ball.velocityX = data.abx;
+	  ball.velocityY = data.aby;
+	  leftWon = data.lw;
+	  slimeLeftScore = data.ls;
+	  slimeRightScore = data.rs;
     });
 	
     legacySkyColor   = '#00f';
